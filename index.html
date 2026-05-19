@@ -32,6 +32,7 @@
                 <div>🧙‍♂️ <b>Bishop:</b> No-Face</div>
                 <div>🌱 <b>Pawn:</b> Sprite</div>
             </div>
+            <p class="text-[10px] text-gray-500 font-sans">👉 <b>Play:</b> Tap your piece to select it, then tap an empty square to move it!</p>
         </div>
     </div>
 
@@ -40,43 +41,192 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+        // --- 1. SETUP CORE SCENE BUILDERS ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0xbae6fd);
+        scene.fog = new THREE.FogExp2(0xbae6fd, 0.015);
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 10, 12);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
         container.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
+        // --- 2. LIGHTING ENGINE ---
         scene.add(new THREE.AmbientLight(0xdbeafe, 1.1));
         const daylight = new THREE.DirectionalLight(0xfffbeb, 1.4);
         daylight.position.set(10, 20, 10);
+        daylight.castShadow = true;
         scene.add(daylight);
 
-        const island = new THREE.Mesh(new THREE.CylinderGeometry(16, 18, 3, 32), new THREE.MeshStandardMaterial({ color: 0x4ade80 }));
+        // --- 3. ENVIRONMENT ISLE ---
+        const island = new THREE.Mesh(new THREE.CylinderGeometry(16, 18, 3, 32), new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.9 }));
         island.position.y = -1.6;
+        island.receiveShadow = true;
         scene.add(island);
 
+        // --- 4. BOARD INTERACTIVE REGISTRY ---
         const sqSize = 1.25;
-        const darkMat = new THREE.MeshStandardMaterial({ color: 0x14532d });
-        const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a });
+        let activeTurn = 'white';
+        let selectedPieceNode = null;
+
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.7 });
+        const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.5 });
 
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const tile = new THREE.Mesh(new THREE.BoxGeometry(sqSize, 0.15, sqSize), (r + c) % 2 === 1 ? darkMat : lightMat);
                 tile.position.set((c - 3.5) * sqSize, 0, (r - 3.5) * sqSize);
+                tile.userData = { row: r, col: c, isTile: true };
+                tile.receiveShadow = true;
                 scene.add(tile);
             }
         }
 
+        // --- 5. INITIAL PIECE INITIALIZATION & LOADING ---
+        const GHIBLI_ASSET_MANIFEST = {
+            'pawn':   { url: 'assets/models/soot_sprite.glb', scale: 0.35, yOffset: 0.1 },
+            'king':   { url: 'assets/models/totoro.glb',       scale: 0.55, yOffset: 0.1 },
+            'queen':  { url: 'assets/models/mononoke.glb',     scale: 0.50, yOffset: 0.1 },
+            'rook':   { url: 'assets/models/howl_castle.glb',  scale: 0.45, yOffset: 0.1 },
+            'knight': { url: 'assets/models/yakul.glb',        scale: 0.50, yOffset: 0.1 },
+            'bishop': { url: 'assets/models/noface.glb',       scale: 0.48, yOffset: 0.1 }
+        };
+
+        const initialLayout = [
+            ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'],
+            ['pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn'],
+            [], [], [], [],
+            ['pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn'],
+            ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
+        ];
+
+        const gltfLoader = new GLTFLoader();
+
+        function createFallbackMesh(type, side) {
+            const group = new THREE.Group();
+            const geo = type === 'pawn' ? new THREE.SphereGeometry(0.22, 12, 12) : new THREE.CylinderGeometry(0.2, 0.28, 0.7, 12);
+            const mat = new THREE.MeshStandardMaterial({ 
+                color: side === 'white' ? 0xfbfbfb : 0x3f3f46, 
+                roughness: 0.4 
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.y = 0.35;
+            mesh.castShadow = true;
+            group.add(mesh);
+            return group;
+        }
+
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const type = initialLayout[r]?.[c];
+                if (!type) continue;
+                const side = (r < 2) ? 'black' : 'white';
+                
+                // Create a container group to hold either fallback or real model seamlessly
+                const pieceContainer = new THREE.Group();
+                pieceContainer.position.set((c - 3.5) * sqSize, 0, (r - 3.5) * sqSize);
+                pieceContainer.userData = { type, side, row: r, col: c, isPiece: true };
+                
+                // Attach visual fallback instantly
+                const fallback = createFallbackMesh(type, side);
+                pieceContainer.add(fallback);
+                scene.add(pieceContainer);
+
+                // Asynchronously stream your Ghibli .glb files from github paths
+                const meta = GHIBLI_ASSET_MANIFEST[type];
+                if (meta) {
+                    gltfLoader.load(meta.url, (gltf) => {
+                        const model = gltf.scene;
+                        model.scale.setScalar(meta.scale);
+                        model.position.set(0, meta.yOffset, 0);
+                        if (side === 'black') model.rotation.y = Math.PI;
+
+                        model.traverse(node => {
+                            if (node.isMesh) {
+                                node.castShadow = true;
+                                node.receiveShadow = true;
+                                // Darken texture coloring for black side pieces slightly
+                                if (side === 'black' && node.material) {
+                                    node.material = node.material.clone();
+                                    node.material.color.multiplyScalar(0.5);
+                                }
+                            }
+                        });
+                        
+                        pieceContainer.remove(fallback);
+                        pieceContainer.add(model);
+                    }, undefined, (err) => {
+                        console.log(`Streaming ${meta.url} failed or delayed. Holding fallback token.`);
+                    });
+                }
+            }
+        }
+
+        // --- 6. INTERACTION RAYCASTER ---
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+
+        function handleInteraction(event) {
+            const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+            const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+
+            pointer.x = (clientX / window.innerWidth) * 2 - 1;
+            pointer.y = -(clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(pointer, camera);
+            const targets = raycaster.intersectObjects(scene.children, true);
+            if (targets.length === 0) return;
+
+            let match = null;
+            for (let i = 0; i < targets.length; i++) {
+                let curr = targets[i].object;
+                while (curr.parent && curr !== scene) {
+                    if (curr.userData.isPiece || curr.userData.isTile) {
+                        match = curr;
+                        break;
+                    }
+                    curr = curr.parent;
+                }
+                if (match) break;
+            }
+
+            if (!match) return;
+
+            if (match.userData.isPiece) {
+                if (match.userData.side === activeTurn) {
+                    if (selectedPieceNode) selectedPieceNode.scale.set(1, 1, 1);
+                    selectedPieceNode = match;
+                    selectedPieceNode.scale.set(1.2, 1.2, 1.2);
+                }
+            } 
+            else if (match.userData.isTile && selectedPieceNode) {
+                selectedPieceNode.position.set(match.position.x, 0, match.position.z);
+                selectedPieceNode.userData.row = match.userData.row;
+                selectedPieceNode.userData.col = match.userData.col;
+                selectedPieceNode.scale.set(1, 1, 1);
+
+                activeTurn = (activeTurn === 'white') ? 'black' : 'white';
+                document.getElementById('turn-indicator').innerText = `${activeTurn.charAt(0).toUpperCase() + activeTurn.slice(1)}'s Turn`;
+                selectedPieceNode = null;
+            }
+        }
+
+        window.addEventListener('click', handleInteraction);
+        window.addEventListener('touchstart', handleInteraction, { passive: true });
+
+        // --- 7. ANIMATION MATRIX ---
         function frame() {
             requestAnimationFrame(frame);
             controls.update();
