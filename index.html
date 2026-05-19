@@ -2,74 +2,101 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ghibli Meadow Chess 3D</title>
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Georgia', serif; }
-        canvas { display: block; }
+        html, body { 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            background-color: #000000; /* Dark canvas backstop */
+            font-family: 'Georgia', serif; 
+        }
+        canvas { display: block; width: 100% !important; height: 100% !important; }
     </style>
 </head>
-<body class="bg-sky-100">
-    <div class="absolute top-4 left-4 z-10 bg-white/90 backdrop-blur-md p-5 rounded-2xl shadow-xl border border-emerald-100 max-w-sm">
+<body>
+
+    <div class="absolute top-4 left-4 right-4 md:right-auto z-10 bg-white/95 backdrop-blur-md p-5 rounded-2xl shadow-xl border border-emerald-100 max-w-sm mx-auto md:mx-0">
         <h1 class="text-2xl font-bold text-emerald-800 tracking-wide">🌳 Ghibli Chess</h1>
         <p class="text-xs text-emerald-600 font-sans mb-4">Live GitHub Deployment</p>
+        
         <div class="space-y-4 border-t border-gray-100 pt-3">
             <div>
                 <span class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Active Cast Blueprint</span>
                 <div class="grid grid-cols-2 gap-2 text-xs text-gray-700 bg-emerald-50/50 p-2 rounded-lg">
                     <div>👑 <b>King:</b> Totoro</div>
                     <div>👑 <b>Queen:</b> Mononoke</div>
-                    <div>🏰 <b>Rook:</b> Moving Castle</div>
+                    <div>🏰 <b>Rook:</b> Castle</div>
                     <div>🦄 <b>Knight:</b> Yakul</div>
                     <div>🧙‍♂️ <b>Bishop:</b> No-Face</div>
-                    <div>🌱 <b>Pawn:</b> Soot Sprite</div>
+                    <div>🌱 <b>Pawn:</b> Sprite</div>
                 </div>
             </div>
+            <p class="text-[10px] text-gray-400 font-sans">💡 Drag to rotate view. Pinch to zoom.</p>
         </div>
     </div>
-    <div id="canvas-container" class="w-screen h-screen"></div>
+
+    <div id="canvas-container" class="absolute top-0 left-0 w-full h-full z-0"></div>
+
     <script>
+        // --- 1. ENVIRONMENT ENGINE CONFIGURATION ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
+        
+        // Deep sky color background for Three.js
+        scene.background = new THREE.Color(0xbae6fd);
         scene.fog = new THREE.FogExp2(0xbae6fd, 0.015);
+
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(0, 11, 13);
+
         const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Lock resolution scaling for mobile performance
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.0;
+        renderer.toneMappingExposure = 1.1;
         container.appendChild(renderer.domElement);
+
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.maxPolarAngle = Math.PI / 2 - 0.05;
-        const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.9);
+
+        // --- 2. GHIBLI ART DIRECTION LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0xdbeafe, 1.0);
         scene.add(ambientLight);
-        const daylight = new THREE.DirectionalLight(0xfffbeb, 1.4);
+
+        const daylight = new THREE.DirectionalLight(0xfffbeb, 1.5);
         daylight.position.set(15, 25, 10);
         daylight.castShadow = true;
-        daylight.shadow.mapSize.width = 2048;
-        daylight.shadow.mapSize.height = 2048;
+        daylight.shadow.mapSize.width = 1024; // Lower map size slightly for smooth mobile frames
+        daylight.shadow.mapSize.height = 1024;
+        daylight.shadow.bias = -0.0005;
         scene.add(daylight);
-        const skyGeo = new THREE.SphereGeometry(400, 32, 15);
-        const skyMat = new THREE.MeshBasicMaterial({ color: 0xbae6fd, side: THREE.BackSide });
-        scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+        // --- 3. FLOATING MEADOW ISLE ---
         const islandGeo = new THREE.CylinderGeometry(18, 20, 4, 32);
-        const islandMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.9 });
+        const islandMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.9, metalness: 0.0 });
         const island = new THREE.Mesh(islandGeo, islandMat);
         island.position.y = -2.1;
         island.receiveShadow = true;
         scene.add(island);
+
+        // --- 4. CHESSBOARD INTERFACE ---
         const boardGroup = new THREE.Group();
         const sqSize = 1.25;
         const darkMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.7 });
         const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.5 });
+
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const sqGeo = new THREE.BoxGeometry(sqSize, 0.15, sqSize);
@@ -80,6 +107,8 @@
             }
         }
         scene.add(boardGroup);
+
+        // --- 5. GHIBLI LOCAL FILE MANIFEST ---
         const GHIBLI_ASSET_MANIFEST = {
             'pawn':   { url: 'assets/models/soot_sprite.glb', scale: 0.35, yOffset: 0.1 },
             'king':   { url: 'assets/models/totoro.glb',       scale: 0.55, yOffset: 0.1 },
@@ -88,8 +117,10 @@
             'knight': { url: 'assets/models/yakul.glb',        scale: 0.50, yOffset: 0.1 },
             'bishop': { url: 'assets/models/noface.glb',       scale: 0.48, yOffset: 0.1 }
         };
+
         const pieceGroup = new THREE.Group();
         scene.add(pieceGroup);
+
         const initialLayout = [
             ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook'],
             ['pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn'],
@@ -97,35 +128,47 @@
             ['pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn', 'pawn'],
             ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
         ];
+
         const gltfLoader = new THREE.GLTFLoader();
+
         function generateProceduralFallback(type, color) {
             const containerMesh = new THREE.Group();
-            let geo = type === 'pawn' ? new THREE.SphereGeometry(0.25, 16, 16) : new THREE.CylinderGeometry(0.25, 0.35, 0.8, 16);
-            let mat = new THREE.MeshStandardMaterial({ color: color === 'white' ? 0xf8fafc : 0x1e293b, roughness: 0.3 });
+            let geo = type === 'pawn' ? new THREE.SphereGeometry(0.22, 16, 16) : new THREE.CylinderGeometry(0.2, 0.3, 0.7, 16);
+            let mat = new THREE.MeshStandardMaterial({
+                color: color === 'white' ? 0xffffff : 0x27272a,
+                roughness: 0.4
+            });
             const baseMesh = new THREE.Mesh(geo, mat);
-            baseMesh.position.y = 0.4;
+            baseMesh.position.y = 0.35;
             baseMesh.castShadow = true;
             containerMesh.add(baseMesh);
             return containerMesh;
         }
+
         function populateSimulation() {
             while(pieceGroup.children.length > 0) { pieceGroup.remove(pieceGroup.children[0]); }
+
             for (let r = 0; r < 8; r++) {
                 for (let c = 0; c < 8; c++) {
                     const type = initialLayout[r]?.[c];
                     if (!type) continue;
+                    
                     const side = (r < 2) ? 'black' : 'white';
                     const posX = (c - 3.5) * sqSize;
                     const posZ = (r - 3.5) * sqSize;
+
                     const fallbackNode = generateProceduralFallback(type, side);
                     fallbackNode.position.set(posX, 0, posZ);
                     pieceGroup.add(fallbackNode);
+
                     const assetMeta = GHIBLI_ASSET_MANIFEST[type];
                     gltfLoader.load(assetMeta.url, (gltf) => {
                         const importedModel = gltf.scene;
                         importedModel.scale.setScalar(assetMeta.scale);
                         importedModel.position.set(posX, assetMeta.yOffset, posZ);
+                        
                         if(side === 'black') importedModel.rotation.y = Math.PI;
+
                         importedModel.traverse(node => {
                             if (node.isMesh) {
                                 node.castShadow = true;
@@ -136,21 +179,30 @@
                                 }
                             }
                         });
+
                         pieceGroup.remove(fallbackNode);
                         pieceGroup.add(importedModel);
                     }, undefined, (err) => {
-                        console.warn(`Local file missing: ${assetMeta.url}`);
+                        console.warn(`Local model missing: ${assetMeta.url}. Using standard geometric fallback.`);
                     });
                 }
             }
         }
+
         populateSimulation();
-        function frame() { requestAnimationFrame(frame); controls.update(); renderer.render(scene, camera); }
+
+        // --- 6. FRAME RENDERING LOOP ---
+        function frame() {
+            requestAnimationFrame(frame);
+            controls.update();
+            renderer.render(scene, camera);
+        }
         frame();
+
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(container.clientWidth, container.clientHeight);
         });
     </script>
 </body>
