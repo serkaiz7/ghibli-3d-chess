@@ -5,10 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Ghibli Meadow Chess 3D</title>
     
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://unpkg.com/three@0.160.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
     
     <style>
         html, body { 
@@ -17,7 +23,7 @@
             width: 100%; 
             height: 100%; 
             overflow: hidden; 
-            background-color: #bae6fd; /* Soft Ghibli blue while loading */
+            background-color: #bae6fd;
             font-family: 'Georgia', serif; 
         }
         canvas { display: block; width: 100vw !important; height: 100vh !important; }
@@ -49,7 +55,11 @@
 
     <div id="canvas-container" class="absolute top-0 left-0 w-full h-full z-0"></div>
 
-    <script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
         // Emergency mobile layout debugger
         window.onerror = function(msg, url, line) {
             const el = document.getElementById('terminal-debug');
@@ -78,7 +88,8 @@
         renderer.toneMappingExposure = 1.1;
         container.appendChild(renderer.domElement);
 
-        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        // Fixed Constructor Call matching Module standards
+        const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.maxPolarAngle = Math.PI / 2 - 0.05;
@@ -90,7 +101,7 @@
         const daylight = new THREE.DirectionalLight(0xfffbeb, 1.5);
         daylight.position.set(15, 25, 10);
         daylight.castShadow = true;
-        daylight.shadow.mapSize.width = 512; // Highly optimized mobile shadow maps
+        daylight.shadow.mapSize.width = 512;
         daylight.shadow.mapSize.height = 512;
         scene.add(daylight);
 
@@ -140,7 +151,8 @@
             ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
         ];
 
-        const gltfLoader = new THREE.GLTFLoader();
+        // Instantiate loader via the newly imported module definition
+        const gltfLoader = new GLTFLoader();
 
         function generateProceduralFallback(type, color) {
             const containerMesh = new THREE.Group();
@@ -174,44 +186,4 @@
                     gltfLoader.load(assetMeta.url, (gltf) => {
                         const importedModel = gltf.scene;
                         importedModel.scale.setScalar(assetMeta.scale);
-                        importedModel.position.set(posX, assetMeta.yOffset, posZ);
-                        
-                        if(side === 'black') importedModel.rotation.y = Math.PI;
-
-                        importedModel.traverse(node => {
-                            if (node.isMesh) {
-                                node.castShadow = true;
-                                if(side === 'black' && node.material) {
-                                    node.material = node.material.clone();
-                                    node.material.color.multiplyScalar(0.4); 
-                                }
-                            }
-                        });
-
-                        pieceGroup.remove(fallbackNode);
-                        pieceGroup.add(importedModel);
-                    }, undefined, (err) => {
-                        // Suppressed internally to let geometric pieces play smoothly
-                    });
-                }
-            }
-        }
-
-        populateSimulation();
-
-        // --- 6. RUNTIME RENDER LOOP ---
-        function frame() {
-            requestAnimationFrame(frame);
-            controls.update();
-            renderer.render(scene, camera);
-        }
-        frame();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
-    </script>
-</body>
-</html>
+                        importedModel.position.set(posX,
