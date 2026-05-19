@@ -20,11 +20,18 @@
 </head>
 <body>
 
-    <div class="absolute top-4 left-4 right-4 md:right-auto z-10 bg-white/95 backdrop-blur-md p-5 rounded-2xl shadow-xl border border-emerald-100 max-w-sm mx-auto md:mx-0">
-        <h1 class="text-2xl font-bold text-emerald-800 tracking-wide">🌳 Ghibli Chess</h1>
-        <div id="turn-indicator" class="inline-block mt-1 text-xs font-bold px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full">White's Turn</div>
-        <div class="space-y-3 border-t border-gray-100 pt-3 mt-3">
-            <div class="grid grid-cols-2 gap-2 text-xs text-gray-700 bg-emerald-50/50 p-2 rounded-lg">
+    <div class="absolute top-3 left-3 right-3 z-10 md:max-w-xs bg-white/90 backdrop-blur-sm p-3 rounded-xl shadow-md border border-emerald-100 transition-all duration-300">
+        <div class="flex justify-between items-center">
+            <h1 class="text-lg font-bold text-emerald-800 tracking-wide">🌳 Ghibli Chess</h1>
+            <div id="turn-indicator" class="text-xs font-bold px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full">White's Turn</div>
+        </div>
+        
+        <details class="mt-2 group">
+            <summary class="text-xs text-gray-500 cursor-pointer focus:outline-none list-none flex justify-between items-center select-none">
+                <span>View Blueprint Roles</span>
+                <span class="transition group-open:rotate-180 text-[10px]">▼</span>
+            </summary>
+            <div class="grid grid-cols-2 gap-1 text-[11px] text-gray-700 bg-emerald-50/50 p-2 mt-1 rounded-lg">
                 <div>👑 <b>King:</b> Totoro</div>
                 <div>👑 <b>Queen:</b> Mononoke</div>
                 <div>🏰 <b>Rook:</b> Castle</div>
@@ -32,8 +39,8 @@
                 <div>🧙‍♂️ <b>Bishop:</b> No-Face</div>
                 <div>🌱 <b>Pawn:</b> Sprite</div>
             </div>
-            <p class="text-[10px] text-gray-500 font-sans">👉 <b>Play:</b> Tap your piece to select it, then tap an empty square to move it!</p>
-        </div>
+        </details>
+        <p class="text-[9px] text-gray-400 mt-1">👉 Tap a piece to select, then tap a square to move. Drag screen to rotate view.</p>
     </div>
 
     <div id="canvas-container" class="absolute top-0 left-0 w-full h-full z-0"></div>
@@ -43,65 +50,69 @@
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // --- 1. SETUP CORE SCENE BUILDERS ---
+        // --- 1. CORE RENDER ENGINE (PERFORMANCE OPTIMIZED) ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xbae6fd);
-        scene.fog = new THREE.FogExp2(0xbae6fd, 0.015);
+        scene.background = new THREE.Color(0xbbf7d0); // Light green pasture backdrop
+        scene.fog = new THREE.FogExp2(0xbbf7d0, 0.02);
 
+        // Position camera higher up for a perfect tactical bird's-eye view over pieces
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 10, 12);
+        camera.position.set(0, 11, 11);
 
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Capped pixel density to fix lag
+        renderer.shadowMap.enabled = false; // Turned off heavy shadow updates for smooth mobile framerate
         container.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
-        controls.maxPolarAngle = Math.PI / 2 - 0.05;
+        controls.dampingFactor = 0.07;
+        controls.maxPolarAngle = Math.PI / 2.2; 
+        controls.minDistance = 5;
+        controls.maxDistance = 20;
 
-        // --- 2. LIGHTING ENGINE ---
-        scene.add(new THREE.AmbientLight(0xdbeafe, 1.1));
-        const daylight = new THREE.DirectionalLight(0xfffbeb, 1.4);
-        daylight.position.set(10, 20, 10);
-        daylight.castShadow = true;
-        scene.add(daylight);
+        // --- 2. FAST LIGHTING MATRIX ---
+        scene.add(new THREE.AmbientLight(0xffffff, 1.2));
+        const sun = new THREE.DirectionalLight(0xfffbeb, 0.8);
+        sun.position.set(5, 15, 5);
+        scene.add(sun);
 
-        // --- 3. ENVIRONMENT ISLE ---
-        const island = new THREE.Mesh(new THREE.CylinderGeometry(16, 18, 3, 32), new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.9 }));
-        island.position.y = -1.6;
-        island.receiveShadow = true;
+        // --- 3. FLOATING BASE ISLAND ---
+        const island = new THREE.Mesh(
+            new THREE.CylinderGeometry(12, 13, 2, 24), 
+            new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.9 })
+        );
+        island.position.y = -1.1;
         scene.add(island);
 
-        // --- 4. BOARD INTERACTIVE REGISTRY ---
+        // --- 4. BOARD GRID CALIBRATION ENGINE ---
         const sqSize = 1.25;
         let activeTurn = 'white';
         let selectedPieceNode = null;
 
-        const darkMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.7 });
-        const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.5 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8 });
+        const lightMat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.6 });
 
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
                 const tile = new THREE.Mesh(new THREE.BoxGeometry(sqSize, 0.15, sqSize), (r + c) % 2 === 1 ? darkMat : lightMat);
-                tile.position.set((c - 3.5) * sqSize, 0, (r - 3.5) * sqSize);
+                // Math fix: Offset tile matrix by 3.5 units to keep center coordinate precisely balanced at 0,0
+                tile.position.set((c - 3.5) * sqSize, -0.075, (r - 3.5) * sqSize);
                 tile.userData = { row: r, col: c, isTile: true };
-                tile.receiveShadow = true;
                 scene.add(tile);
             }
         }
 
-                // --- 5. GHIBLI PIECE MANAGEMENT INTERFACE ---
+        // --- 5. SCALE AND HEIGHT FIX MANIFEST ---
         const GHIBLI_ASSET_MANIFEST = {
-            'pawn':   { url: 'assets/models/soot_sprite.glb', scale: 0.35, yOffset: 0.1 },
-            'king':   { url: 'assets/models/totoro.glb',       scale: 0.55, yOffset: 0.1 },
-            'queen':  { url: 'assets/models/mononoke.glb',     scale: 0.50, yOffset: 0.1 },
-            'rook':   { url: 'assets/models/howl_castle.glb',  scale: 0.05, yOffset: 0.0 }, // Scaled down significantly
-            'knight': { url: 'assets/models/yakul.glb',        scale: 0.50, yOffset: 0.1 },
-            'bishop': { url: 'assets/models/noface.glb',       scale: 0.48, yOffset: 0.1 }
+            'pawn':   { url: 'assets/models/soot_sprite.glb', scale: 0.28, yOffset: 0.0 },
+            'king':   { url: 'assets/models/totoro.glb',       scale: 0.40, yOffset: 0.0 },
+            'queen':  { url: 'assets/models/mononoke.glb',     scale: 0.38, yOffset: 0.0 },
+            'rook':   { url: 'assets/models/howl_castle.glb',  scale: 0.015, yOffset: 0.0 }, // Drastically downsized to match squares
+            'knight': { url: 'assets/models/yakul.glb',        scale: 0.38, yOffset: 0.0 },
+            'bishop': { url: 'assets/models/noface.glb',       scale: 0.35, yOffset: 0.35 } // Raised yOffset to prevent sinking underground
         };
 
         const initialLayout = [
@@ -112,21 +123,17 @@
             ['rook', 'knight', 'bishop', 'queen', 'king', 'bishop', 'knight', 'rook']
         ];
 
-        const gltfLoader = new GLTFLoader();
-
         function createFallbackMesh(type, side) {
             const group = new THREE.Group();
-            const geo = type === 'pawn' ? new THREE.SphereGeometry(0.22, 12, 12) : new THREE.CylinderGeometry(0.2, 0.28, 0.7, 12);
-            const mat = new THREE.MeshStandardMaterial({ 
-                color: side === 'white' ? 0xfbfbfb : 0x3f3f46, 
-                roughness: 0.4 
-            });
+            const geo = type === 'pawn' ? new THREE.SphereGeometry(0.2, 8, 8) : new THREE.CylinderGeometry(0.18, 0.24, 0.6, 8);
+            const mat = new THREE.MeshStandardMaterial({ color: side === 'white' ? 0xffffff : 0x334155, roughness: 0.5 });
             const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.y = 0.35;
-            mesh.castShadow = true;
+            mesh.position.y = 0.3;
             group.add(mesh);
             return group;
         }
+
+        const gltfLoader = new GLTFLoader();
 
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
@@ -134,33 +141,32 @@
                 if (!type) continue;
                 const side = (r < 2) ? 'black' : 'white';
                 
-                // Create a container group to hold either fallback or real model seamlessly
                 const pieceContainer = new THREE.Group();
+                // Fix: Aligned starting coordinate loop mapping matching tile centerpoints
                 pieceContainer.position.set((c - 3.5) * sqSize, 0, (r - 3.5) * sqSize);
                 pieceContainer.userData = { type, side, row: r, col: c, isPiece: true };
                 
-                // Attach visual fallback instantly
                 const fallback = createFallbackMesh(type, side);
                 pieceContainer.add(fallback);
                 scene.add(pieceContainer);
 
-                // Asynchronously stream your Ghibli .glb files from github paths
                 const meta = GHIBLI_ASSET_MANIFEST[type];
                 if (meta) {
                     gltfLoader.load(meta.url, (gltf) => {
                         const model = gltf.scene;
                         model.scale.setScalar(meta.scale);
                         model.position.set(0, meta.yOffset, 0);
-                        if (side === 'black') model.rotation.y = Math.PI;
+                        
+                        // Orient pieces correctly to face their opponents
+                        if (side === 'black') {
+                            model.rotation.y = Math.PI;
+                        }
 
                         model.traverse(node => {
                             if (node.isMesh) {
-                                node.castShadow = true;
-                                node.receiveShadow = true;
-                                // Darken texture coloring for black side pieces slightly
                                 if (side === 'black' && node.material) {
                                     node.material = node.material.clone();
-                                    node.material.color.multiplyScalar(0.5);
+                                    node.material.color.multiplyScalar(0.45); // Visual dark distinction
                                 }
                             }
                         });
@@ -168,13 +174,13 @@
                         pieceContainer.remove(fallback);
                         pieceContainer.add(model);
                     }, undefined, (err) => {
-                        console.log(`Streaming ${meta.url} failed or delayed. Holding fallback token.`);
+                        console.error("Asset stream bottleneck, holding fallback indicator.");
                     });
                 }
             }
         }
 
-        // --- 6. INTERACTION RAYCASTER ---
+        // --- 6. POSITION-ACCURATE RAYCASTER ENGINE ---
         const raycaster = new THREE.Raycaster();
         const pointer = new THREE.Vector2();
 
@@ -208,10 +214,11 @@
                 if (match.userData.side === activeTurn) {
                     if (selectedPieceNode) selectedPieceNode.scale.set(1, 1, 1);
                     selectedPieceNode = match;
-                    selectedPieceNode.scale.set(1.2, 1.2, 1.2);
+                    selectedPieceNode.scale.set(1.15, 1.15, 1.15); // Clear selection pop
                 }
             } 
             else if (match.userData.isTile && selectedPieceNode) {
+                // Pinpoint snapping destination alignment
                 selectedPieceNode.position.set(match.position.x, 0, match.position.z);
                 selectedPieceNode.userData.row = match.userData.row;
                 selectedPieceNode.userData.col = match.userData.col;
@@ -226,7 +233,7 @@
         window.addEventListener('click', handleInteraction);
         window.addEventListener('touchstart', handleInteraction, { passive: true });
 
-        // --- 7. ANIMATION MATRIX ---
+        // --- 7. RUNTIME FRAME EXECUTION ---
         function frame() {
             requestAnimationFrame(frame);
             controls.update();
